@@ -1,0 +1,57 @@
+# nginx reverse-proxy for the Cleanshelf / Shopflow ERP integration.
+# Upstream URL + tuning knobs are env-driven — see Dockerfile and README.
+
+server {
+    listen 80 default_server;
+    server_name ${PROXY_SERVER_NAME};
+
+    client_max_body_size ${PROXY_CLIENT_MAX_BODY_SIZE};
+
+    # Health probe for Coolify / Docker healthchecks. Always returns 200 OK,
+    # never hits the upstream ERP so a flaky ERP doesn't mark the proxy down.
+    location = /healthz {
+        access_log off;
+        return 200 'ok';
+        add_header Content-Type text/plain;
+    }
+
+    # Everything else is forwarded verbatim to the ERP.
+    location / {
+        # ── Optional IP allow-list ──────────────────────────────────────────
+        # Populate ALLOW_CIDRS at deploy time (comma-separated CIDRs, see
+        # README). Leave empty to allow any source (Coolify still front-gates
+        # via its own Traefik instance if the service is private).
+        #
+        # When ALLOW_CIDRS is non-empty, `allow` directives are injected by
+        # the entrypoint hook below via a separate include file.
+        include /etc/nginx/conf.d/allow-list.conf;
+
+        proxy_pass         ${ERP_UPSTREAM};
+        proxy_http_version 1.1;
+
+        # Preserve the original path + query string as-is. No rewriting, so
+        # the admin setting just needs the scheme+host of this proxy and the
+        # upstream path (e.g. /api/PRODUCTS) flows through unchanged.
+        proxy_set_header Host              $proxy_host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # Keep Authorization / X-API-Key / any custom auth headers that
+        # externalBranchStockService sends.
+        proxy_pass_request_headers on;
+
+        proxy_connect_timeout ${PROXY_CONNECT_TIMEOUT};
+        proxy_read_timeout    ${PROXY_READ_TIMEOUT};
+        proxy_send_timeout    ${PROXY_SEND_TIMEOUT};
+
+        # Don't buffer — ERP responses are small JSON and clients want them ASAP.
+        proxy_buffering off;
+
+        # Small retry budget for transient upstream flakes.
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+        proxy_next_upstream_tries 2;
+        proxy_next_upstream_timeout 5s;
+    }
+}
