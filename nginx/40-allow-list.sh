@@ -5,7 +5,9 @@
 #
 # Translates the ALLOW_CIDRS env var — comma-separated CIDRs — into an
 # `allow ...; deny all;` include file. When ALLOW_CIDRS is empty or unset,
-# writes an empty file so the `include` in default.conf is a no-op.
+# writes a deny-all rule so nginx rejects every source IP (fail closed) — this
+# proxy republishes a possibly-unauthenticated ERP, so "no allow-list" must
+# never mean "allow the whole internet".
 set -eu
 
 OUT=/etc/nginx/conf.d/allow-list.conf
@@ -13,7 +15,12 @@ OUT=/etc/nginx/conf.d/allow-list.conf
 
 CIDRS="${ALLOW_CIDRS:-}"
 if [ -z "$CIDRS" ]; then
-    # No allow-list configured — fall through to nginx default (allow all).
+    # No allow-list configured — fail CLOSED. Deny every source IP and warn
+    # loudly so the misconfiguration is obvious in the container logs.
+    echo "WARNING: ALLOW_CIDRS is empty/unset — failing closed, denying ALL source IPs." >&2
+    echo "         Set ALLOW_CIDRS to the egress CIDR(s) allowed to reach this proxy." >&2
+    echo "# ALLOW_CIDRS was empty/unset — failing closed (deny all)." >> "$OUT"
+    echo "deny all;" >> "$OUT"
     exit 0
 fi
 

@@ -21,24 +21,25 @@ directly.
 
 | Name | Required | Default | Purpose |
 |---|---|---|---|
-| `ERP_UPSTREAM` | **Yes** | `http://example.com:8080` | Base URL of the real ERP (scheme + host + port, no trailing slash). Example: `http://41.84.131.206:32012`. |
+| `ERP_UPSTREAM` | **Yes** | `http://example.com:8080` | Base URL of the real ERP (scheme + host + port, no trailing slash). Example: `http://erp-host.internal:PORT`. The real host/IP goes in Coolify env only — never commit it. |
 | `PROXY_SERVER_NAME` | No | `_` | `server_name` for the nginx vhost. Leave as `_` and let Coolify's Traefik route by Host header. |
 | `PROXY_CLIENT_MAX_BODY_SIZE` | No | `10m` | Max request body. ERP product sync payloads fit easily. |
 | `PROXY_CONNECT_TIMEOUT` | No | `10s` | Upstream connect timeout. |
 | `PROXY_READ_TIMEOUT` | No | `60s` | Upstream read timeout. |
 | `PROXY_SEND_TIMEOUT` | No | `60s` | Upstream send timeout. |
-| `ALLOW_CIDRS` | No | *(empty)* | Comma-separated CIDRs that are allowed to hit the proxy. When set, all other sources get `403 Forbidden`. Leave empty to inherit Coolify/Traefik's front gating. |
+| `ALLOW_CIDRS` | **Recommended** | *(empty)* | Comma-separated CIDRs that are allowed to hit the proxy. When set, all other sources get `403 Forbidden`. **Fails closed:** if left empty/unset the proxy denies every source IP, so you must set this to deploy a usable proxy. |
 
 ## Deploy on Coolify
 
 1. **New Application** → type: **Public Repository** (or Private; doesn't matter) → URL: this repo → Branch: `main`.
 2. **Build Pack**: Dockerfile. Dockerfile path: `/Dockerfile`. Port: `80`.
 3. **Domain**: give it a Coolify subdomain, e.g. `erp-proxy.yourdomain.com`. Coolify will provision a Let's Encrypt cert.
-4. **Environment Variables** (at minimum):
+4. **Environment Variables** (at minimum — real host/IP goes here, never in git):
    ```
-   ERP_UPSTREAM=http://41.84.131.206:32012
+   ERP_UPSTREAM=http://erp-host.internal:PORT
    ```
-   Optional, to lock the proxy down to Cleanshelf's egress IP:
+   Required to make the proxy reachable — lock it to Cleanshelf's egress IP
+   (the allow-list fails closed, so an unset `ALLOW_CIDRS` denies everything):
    ```
    ALLOW_CIDRS=1.2.3.4/32
    ```

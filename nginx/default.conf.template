@@ -17,13 +17,12 @@ server {
 
     # Everything else is forwarded verbatim to the ERP.
     location / {
-        # ── Optional IP allow-list ──────────────────────────────────────────
+        # ── IP allow-list (fail closed) ─────────────────────────────────────
         # Populate ALLOW_CIDRS at deploy time (comma-separated CIDRs, see
-        # README). Leave empty to allow any source (Coolify still front-gates
-        # via its own Traefik instance if the service is private).
-        #
-        # When ALLOW_CIDRS is non-empty, `allow` directives are injected by
-        # the entrypoint hook below via a separate include file.
+        # README). The entrypoint hook materialises this include file:
+        # `allow` directives when ALLOW_CIDRS is set, or a bare `deny all;`
+        # when it is empty/unset — so an unconfigured proxy denies every
+        # source rather than republishing the ERP to the internet.
         include /etc/nginx/conf.d/allow-list.conf;
 
         proxy_pass         ${ERP_UPSTREAM};
