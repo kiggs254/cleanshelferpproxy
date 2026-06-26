@@ -69,6 +69,7 @@ If something goes wrong, put the old direct URL back in the Cleanshelf admin Set
 ## Security notes
 
 - The proxy is reachable by anyone who finds the public hostname. If the ERP itself is unauthenticated, **set `ALLOW_CIDRS`** to Cleanshelf's egress IP or an internal Tailscale/Wireguard range. Otherwise you're republishing the ERP to the internet.
+- `ALLOW_CIDRS` matches the **real client IP**, recovered from Traefik's `X-Forwarded-For`. The vhost trusts the private Docker ranges (`set_real_ip_from`) because in Coolify only Traefik can reach this container — so an `ALLOW_CIDRS` of Cleanshelf's public egress IP (`<ip>/32`) actually matches. Without that real-IP recovery nginx would only ever see Traefik's container IP and every allow-listed request would 403.
 - Bearer tokens and API keys are forwarded in the `Authorization` / custom header. The Cleanshelf → proxy leg is HTTPS (Let's Encrypt via Coolify) so the tokens are encrypted in transit for the public portion of the hop. The proxy → ERP leg is plain HTTP inside whatever network segment the proxy server sits in — make sure that segment is trusted.
 - Do **not** bake the ERP URL or tokens into the image. Use Coolify env vars so rotations don't require rebuilds.
 
